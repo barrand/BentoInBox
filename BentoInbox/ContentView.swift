@@ -8,59 +8,45 @@
 import SwiftUI
 import SwiftData
 
-struct ContentView: View {
+// RootView decides whether to show SignIn or the Inbox based on auth state
+struct RootView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.authService) private var authService
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+
+    @State private var signInVM = SignInViewModel()
+    @State private var inboxVM = InboxViewModel()
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
+        Group {
+            if appState.isSignedIn {
+                InboxView(viewModel: inboxVM)
+            } else {
+                SignInView(viewModel: signInVM)
             }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
-            .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
         }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+        .task {
+            // On launch, check sign-in status
+            appState.isSignedIn = await signInVM.checkSignedIn(authService: authService)
+            if appState.isSignedIn {
+                // Seed categories if needed
+                try? SeedCategoryLoader.seedIfNeeded(modelContext)
             }
         }
     }
 }
 
 #Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+    // Preview with in-memory store and mocked services
+    let container = try! ModelContainer(for: Message.self, Category.self, TrainingExample.self, SyncState.self,
+                                       configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let appState = AppState()
+    appState.isSignedIn = true
+    let inboxVM = InboxViewModel()
+    return RootView()
+        .environment(appState)
+        .environment(\.authService, MockAuthService())
+        .environment(\.gmailService, MockGmailService())
+        .modelContainer(container)
 }
+
