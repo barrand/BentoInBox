@@ -42,11 +42,9 @@ struct RootView: View {
                                        configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     let appState = AppState()
     appState.isSignedIn = true
-    let inboxVM = InboxViewModel()
     return RootView()
         .environment(appState)
         .environment(\.authService, MockAuthService())
         .environment(\.gmailService, MockGmailService())
         .modelContainer(container)
 }
-
