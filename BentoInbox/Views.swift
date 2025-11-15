@@ -29,7 +29,7 @@ struct SignInView: View {
                 if viewModel.isSigningIn {
                     ProgressView()
                 } else {
-                    Text("Sign in with Google (Mock)")
+                    Text("Sign in with Google")
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -48,14 +48,20 @@ struct SignInView: View {
 struct InboxView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.gmailService) private var gmailService
+    @Environment(\.authService) private var authService
+    @Environment(AppState.self) private var appState
 
     @StateObject var viewModel: InboxViewModel
+    @State private var signInVM = SignInViewModel()
 
     // Selection drives the detail pane on macOS and wide layouts.
     @State private var selectedMessageId: String? = nil
 
     // Control split view visibility to prefer both columns on wide screens.
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    
+    // User email for display
+    @State private var userEmail: String?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -70,6 +76,7 @@ struct InboxView: View {
             try? viewModel.load(context: modelContext)
             await viewModel.refresh(context: modelContext, gmail: gmailService)
             selectedMessageId = nil
+            userEmail = await gmailService.currentUserEmail()
         }
 #if os(iOS)
         .preferredColorScheme(.dark)
@@ -117,12 +124,24 @@ struct InboxView: View {
                 ProgressView().controlSize(.large)
             }
         }
+        .alert("Error", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("OK") {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            if let error = viewModel.errorMessage {
+                Text(error)
+            }
+        }
         .navigationTitle("Inbox")
 #if os(macOS)
         .navigationSplitViewColumnWidth(min: 240, ideal: 300)
 #endif
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItemGroup(placement: .automatic) {
                 Picker("Filter", selection: Binding(
                     get: { filterTag(viewModel.filter) },
                     set: { tag in
@@ -168,6 +187,23 @@ struct InboxView: View {
                     CategoriesView()
                 } label: {
                     Label("Categories", systemImage: "tag")
+                }
+                
+                Menu {
+                    if let email = userEmail {
+                        Text(email)
+                            .font(.caption)
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        Task {
+                            await signInVM.signOut(authService: authService, appState: appState)
+                        }
+                    } label: {
+                        Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                } label: {
+                    Label("Account", systemImage: "person.circle")
                 }
             }
         }

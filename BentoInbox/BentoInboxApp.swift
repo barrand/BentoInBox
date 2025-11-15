@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import GoogleSignIn
 
 @main
 struct BentoInboxApp: App {
@@ -27,10 +28,13 @@ struct BentoInboxApp: App {
         }
     }()
 
-    // App-wide services (mocked for now)
+    // App-wide services
     @State private var appState = AppState()
-    @State private var authService: AuthService = MockAuthService()
-    @State private var gmailService: GmailService = MockGmailService()
+    @State private var authService: AuthService = GoogleAuthService()
+    @State private var gmailService: GmailService = {
+        let auth = GoogleAuthService()
+        return GoogleGmailService(authService: auth)
+    }()
 
     var body: some Scene {
         WindowGroup {
@@ -38,8 +42,9 @@ struct BentoInboxApp: App {
                 .environment(appState)
                 .environment(\.authService, authService)
                 .environment(\.gmailService, gmailService)
-                .onAppear {
-                    // no-op; real initialization later
+                .onOpenURL { url in
+                    // Handle Google OAuth callback
+                    GIDSignIn.sharedInstance.handle(url)
                 }
         }
         .modelContainer(sharedModelContainer)
