@@ -4,4 +4,13 @@
    <FileRef
       location = "self:">
    </FileRef>
+   <FileRef
+      location = "group:BentoInbox.entitlements">
+   </FileRef>
+   <FileRef
+      location = "group:BentoInbox 2.entitlements">
+   </FileRef>
+   <FileRef
+      location = "group:BentoInbox 3.entitlements">
+   </FileRef>
 </Workspace>
