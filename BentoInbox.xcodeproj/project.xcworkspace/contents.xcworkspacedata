@@ -5,12 +5,36 @@
       location = "self:">
    </FileRef>
    <FileRef
-      location = "group:BentoInbox.entitlements">
+      location = "group:TRAINING_FEATURE.md">
    </FileRef>
    <FileRef
-      location = "group:BentoInbox 2.entitlements">
+      location = "group:TRAINING_UI_UPDATES.md">
    </FileRef>
    <FileRef
-      location = "group:BentoInbox 3.entitlements">
+      location = "group:QUICK_START_TRAINING.md">
+   </FileRef>
+   <FileRef
+      location = "group:CLEAR_OLD_CATEGORIES.md">
+   </FileRef>
+   <FileRef
+      location = "group:TRAINING_UI_LAYOUT.md">
+   </FileRef>
+   <FileRef
+      location = "group:CATEGORY_DEFINITIONS_SUMMARY.md">
+   </FileRef>
+   <FileRef
+      location = "group:EMAIL_DISPLAY_ENHANCEMENT.md">
+   </FileRef>
+   <FileRef
+      location = "group:TRAINING_VIEW_FIX.md">
+   </FileRef>
+   <FileRef
+      location = "group:PUBLISHING_ERROR_FIX.md">
+   </FileRef>
+   <FileRef
+      location = "group:DEBUG_EMPTY_VIEW.md">
+   </FileRef>
+   <FileRef
+      location = "group:FRESH_START.md">
    </FileRef>
 </Workspace>

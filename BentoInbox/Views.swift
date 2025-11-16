@@ -189,6 +189,12 @@ struct InboxView: View {
                     Label("Categories", systemImage: "tag")
                 }
                 
+                NavigationLink {
+                    TrainingView()
+                } label: {
+                    Label("Train Model", systemImage: "brain")
+                }
+                
                 Menu {
                     if let email = userEmail {
                         Text(email)
@@ -317,6 +323,9 @@ struct MessageDetailView: View {
     let onAssign: (CategoryDTO?) -> Void
 
     @State private var selected: CategoryDTO?
+    
+    // Sentinel UUID for "Uncategorized" state
+    private let uncategorizedID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
 
     var body: some View {
         Form {
@@ -334,13 +343,18 @@ struct MessageDetailView: View {
             }
             Section("Category") {
                 Picker("Assign", selection: Binding(
-                    get: { selected?.id ?? message.userCategoryId ?? UUID() },
+                    get: { selected?.id ?? message.userCategoryId ?? uncategorizedID },
                     set: { newValue in
-                        selected = categories.first(where: { $0.id == newValue })
-                        onAssign(selected)
+                        if newValue == uncategorizedID {
+                            selected = nil
+                            onAssign(nil)
+                        } else {
+                            selected = categories.first(where: { $0.id == newValue })
+                            onAssign(selected)
+                        }
                     })
                 ) {
-                    Label("Uncategorized", systemImage: "tray").tag(UUID())
+                    Label("Uncategorized", systemImage: "tray").tag(uncategorizedID)
                     ForEach(categories) { c in
                         Label {
                             Text(c.name)
@@ -367,6 +381,7 @@ struct MessageDetailView: View {
 struct CategoriesView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = CategoriesViewModel()
+    @State private var showingResetConfirmation = false
 
     var body: some View {
         List {
@@ -401,12 +416,139 @@ struct CategoriesView: View {
             }
         }
         .navigationTitle("Categories")
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    showingResetConfirmation = true
+                } label: {
+                    Label("Reset to P1-P4", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        .alert("Reset Categories?", isPresented: $showingResetConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                do {
+                    try SeedCategoryLoader.resetToP1P4System(modelContext)
+                    try viewModel.load(context: modelContext)
+                } catch {
+                    viewModel.errorMessage = error.localizedDescription
+                }
+            }
+        } message: {
+            Text("This will delete all existing categories and replace them with the P1-P4 priority system. Existing email categorizations will be cleared.")
+        }
+        .alert("Error", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("OK") { viewModel.errorMessage = nil }
+        } message: {
+            if let error = viewModel.errorMessage {
+                Text(error)
+            }
+        }
         .task {
             try? viewModel.load(context: modelContext)
         }
 #if os(iOS)
         .preferredColorScheme(.dark)
 #endif
+    }
+}
+
+struct TrainingView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(filter: #Predicate<Message> { $0.userCategoryId == nil }, sort: \Message.date, order: .reverse)
+    private var uncategorizedMessages: [Message]
+    
+    @State private var currentIndex = 0
+    
+    var body: some View {
+        VStack {
+            if uncategorizedMessages.isEmpty {
+                Text("No uncategorized messages")
+                    .font(.title)
+                    .foregroundStyle(.secondary)
+            } else if currentIndex < uncategorizedMessages.count {
+                let message = uncategorizedMessages[currentIndex]
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text("Email \(currentIndex + 1) of \(uncategorizedMessages.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Date:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(message.date, style: .date)
+                            Text(message.date, style: .time)
+                        }
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("From:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(message.from)
+                                .font(.body)
+                        }
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Subject:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(message.subject ?? "(No subject)")
+                                .font(.headline)
+                        }
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Content:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(message.snippet ?? "(No content)")
+                                .font(.body)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                
+                Divider()
+                
+                HStack {
+                    Button("Previous") {
+                        if currentIndex > 0 {
+                            currentIndex -= 1
+                        }
+                    }
+                    .disabled(currentIndex == 0)
+                    
+                    Spacer()
+                    
+                    Button("Next") {
+                        if currentIndex < uncategorizedMessages.count - 1 {
+                            currentIndex += 1
+                        }
+                    }
+                    .disabled(currentIndex >= uncategorizedMessages.count - 1)
+                }
+                .padding()
+            } else {
+                Text("All done!")
+                    .font(.title)
+            }
+        }
+        .navigationTitle("Train Model")
     }
 }
 

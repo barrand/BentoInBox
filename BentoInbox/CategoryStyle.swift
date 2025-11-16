@@ -4,6 +4,22 @@ import SwiftUI
 
 func categoryIconName(for category: CategoryDTO) -> String {
     let name = category.name.lowercased()
+    
+    // Handle P1-P4 priority categories
+    if name.contains("p1") || name.contains("needs attention") {
+        return "exclamationmark.circle.fill"
+    }
+    if name.contains("p2") || name.contains("can wait") {
+        return "clock.fill"
+    }
+    if name.contains("p3") || name.contains("newsletter") || name.contains("automated") {
+        return "newspaper.fill"
+    }
+    if name.contains("p4") || name.contains("junk") {
+        return "trash.fill"
+    }
+    
+    // Original category matching
     switch name {
     case "uncategorized", "none", "other": return "tray"
     case "work", "office": return "briefcase.fill"

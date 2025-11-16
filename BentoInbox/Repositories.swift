@@ -60,6 +60,8 @@ protocol MessageRepository {
     func fetchByCategory(_ categoryId: UUID, limit: Int, in context: ModelContext) throws -> [MessageDTO]
     func updateUserCategory(messageId: String, categoryId: UUID?, in context: ModelContext) throws
     func existingIds(in context: ModelContext) throws -> Set<String>
+    func fetchForTraining(limit: Int, in context: ModelContext) throws -> [MessageDTO]
+    func countUncategorized(in context: ModelContext) throws -> Int
 }
 
 protocol CategoryRepository {
@@ -136,6 +138,23 @@ final class SwiftDataMessageRepository: MessageRepository {
         let descriptor = FetchDescriptor<Message>()
         let models = try context.fetch(descriptor)
         return Set(models.map { $0.id })
+    }
+    
+    func fetchForTraining(limit: Int, in context: ModelContext) throws -> [MessageDTO] {
+        // Smart sampling: Mix of uncategorized messages with diverse characteristics
+        // Prioritize uncategorized, but include some variety
+        var descriptor = FetchDescriptor<Message>(
+            predicate: #Predicate { $0.userCategoryId == nil },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        let models = try context.fetch(descriptor)
+        return models.map { $0.toDTO() }
+    }
+    
+    func countUncategorized(in context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<Message>(predicate: #Predicate { $0.userCategoryId == nil })
+        return try context.fetchCount(descriptor)
     }
 
     private func fetchModel(by id: String, in context: ModelContext) throws -> Message? {
