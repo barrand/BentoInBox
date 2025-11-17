@@ -11,6 +11,7 @@ A smart Gmail inbox organizer for iOS and macOS that uses categories to help you
 ✅ **Clean Architecture** - Protocol-based design with separation of concerns  
 ✅ **Native SwiftUI** - Modern UI with support for iOS and macOS  
 ✅ **Privacy First** - Only requests read-only Gmail access  
+✅ **Keyboard Shortcuts** - Fast email categorization with hotkeys (1-4, Space/S to skip)  
 
 ## Screenshots
 
@@ -260,6 +261,8 @@ BentoInbox respects your privacy:
 - [Setup Guide](SETUP_GUIDE.md)
 - [Migration Checklist](MIGRATION_CHECKLIST.md)
 - [Changes Summary](CHANGES_SUMMARY.md)
+- [Training Data Flow](TRAINING_DATA_FLOW.md)
+- [Keyboard Shortcuts](HOTKEYS.md)
 - [Google Sign-In iOS](https://github.com/google/GoogleSignIn-iOS)
 - [Gmail API Reference](https://developers.google.com/gmail/api)
 

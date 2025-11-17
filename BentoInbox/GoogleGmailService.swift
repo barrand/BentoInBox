@@ -84,8 +84,98 @@ final class GoogleGmailService: GmailService {
         return message.toMetadata()
     }
     
+    func getMessageBody(id: String) async throws -> GmailMessageBody {
+        let token = try await authService.validAccessToken()
+        
+        var components = URLComponents(string: "\(baseURL)/messages/\(id)")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "full")
+        ]
+        
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GmailError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw GmailError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        let message = try JSONDecoder().decode(GmailMessage.self, from: data)
+        return extractBody(from: message.payload)
+    }
+    
     func currentUserEmail() async -> String? {
         return await authService.accountEmail()
+    }
+    
+    // MARK: - Body Extraction
+    
+    private func extractBody(from payload: MessagePayload?) -> GmailMessageBody {
+        guard let payload = payload else {
+            return GmailMessageBody(plain: nil, html: nil)
+        }
+        
+        var plainText: String?
+        var htmlText: String?
+        
+        // Try to get body from the main payload
+        if let body = payload.body, let data = body.data {
+            let decoded = decodeBase64(data)
+            if payload.mimeType?.contains("text/plain") == true {
+                plainText = decoded
+            } else if payload.mimeType?.contains("text/html") == true {
+                htmlText = decoded
+            }
+        }
+        
+        // If no body yet, recursively search parts
+        if plainText == nil && htmlText == nil, let parts = payload.parts {
+            extractBodyFromParts(parts, plainText: &plainText, htmlText: &htmlText)
+        }
+        
+        return GmailMessageBody(plain: plainText, html: htmlText)
+    }
+    
+    private func extractBodyFromParts(_ parts: [MessagePart], plainText: inout String?, htmlText: inout String?) {
+        for part in parts {
+            // Check this part's body
+            if let body = part.body, let data = body.data {
+                let decoded = decodeBase64(data)
+                if part.mimeType?.contains("text/plain") == true && plainText == nil {
+                    plainText = decoded
+                } else if part.mimeType?.contains("text/html") == true && htmlText == nil {
+                    htmlText = decoded
+                }
+            }
+            
+            // Recursively check nested parts
+            if let nestedParts = part.parts {
+                extractBodyFromParts(nestedParts, plainText: &plainText, htmlText: &htmlText)
+            }
+            
+            // Stop if we found both
+            if plainText != nil && htmlText != nil {
+                break
+            }
+        }
+    }
+    
+    private func decodeBase64(_ base64String: String) -> String? {
+        // Gmail uses URL-safe base64 encoding, replace characters
+        let base64 = base64String
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        
+        guard let data = Data(base64Encoded: base64) else {
+            return nil
+        }
+        
+        return String(data: data, encoding: .utf8)
     }
 }
 
@@ -162,6 +252,20 @@ private struct GmailMessage: Codable {
 
 private struct MessagePayload: Codable {
     let headers: [MessageHeader]?
+    let mimeType: String?
+    let body: MessageBody?
+    let parts: [MessagePart]?
+}
+
+private struct MessagePart: Codable {
+    let mimeType: String?
+    let body: MessageBody?
+    let parts: [MessagePart]?
+}
+
+private struct MessageBody: Codable {
+    let size: Int?
+    let data: String?
 }
 
 private struct MessageHeader: Codable {

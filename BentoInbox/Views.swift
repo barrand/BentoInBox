@@ -119,6 +119,38 @@ struct InboxView: View {
             }
         }
         .listStyle(.inset)
+        .onKeyPress("1") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(1) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
+        .onKeyPress("2") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(2) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
+        .onKeyPress("3") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(3) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
+        .onKeyPress("4") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(4) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
         .overlay {
             if viewModel.isRefreshing {
                 ProgressView().controlSize(.large)
@@ -251,6 +283,26 @@ struct InboxView: View {
         if let uuid = UUID(uuidString: tag) { return .category(uuid) }
         return .all
     }
+    
+    private func categoryForPriority(_ priority: Int) -> CategoryDTO? {
+        viewModel.categories.first { category in
+            let name = category.name.lowercased()
+            // Match "p1 ", "p1-", "p1:" patterns at the start of the name
+            return name.hasPrefix("p\(priority) ") ||
+                   name.hasPrefix("p\(priority)-") ||
+                   name.hasPrefix("p\(priority):")
+        }
+    }
+    
+    private func getPriority(for category: CategoryDTO) -> Int? {
+        let name = category.name.lowercased()
+        // Check for "p1 ", "p1-", "p1:" patterns at the start
+        if name.hasPrefix("p1 ") || name.hasPrefix("p1-") || name.hasPrefix("p1:") { return 1 }
+        if name.hasPrefix("p2 ") || name.hasPrefix("p2-") || name.hasPrefix("p2:") { return 2 }
+        if name.hasPrefix("p3 ") || name.hasPrefix("p3-") || name.hasPrefix("p3:") { return 3 }
+        if name.hasPrefix("p4 ") || name.hasPrefix("p4-") || name.hasPrefix("p4:") { return 4 }
+        return nil
+    }
 }
 
 struct MessageRow: View {
@@ -315,10 +367,91 @@ struct MessageDetailView: View {
     let message: MessageDTO
     let categories: [CategoryDTO]
     let onAssign: (CategoryDTO?) -> Void
+    
+    @Environment(\.gmailService) private var gmailService
 
     @State private var selected: CategoryDTO?
+<<<<<<< ours
+    @State private var messageBody: GmailMessageBody?
+    @State private var isLoadingBody = false
+    @State private var bodyLoadError: String?
+    @State private var hasLoadedBody = false
+    
+    // Sentinel UUID for "Uncategorized" state
+    private let uncategorizedID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    
+    private func categoryForPriority(_ priority: Int) -> CategoryDTO? {
+        categories.first { category in
+            let name = category.name.lowercased()
+            // Match "p1 ", "p1-", "p1:" patterns at the start of the name
+            return name.hasPrefix("p\(priority) ") ||
+                   name.hasPrefix("p\(priority)-") ||
+                   name.hasPrefix("p\(priority):")
+        }
+    }
+    
+    private func assignCategory(_ category: CategoryDTO?) {
+        selected = category
+        onAssign(category)
+    }
+    
+    private func getPriority(for category: CategoryDTO) -> Int? {
+        let name = category.name.lowercased()
+        // Check for "p1 ", "p1-", "p1:" patterns at the start
+        if name.hasPrefix("p1 ") || name.hasPrefix("p1-") || name.hasPrefix("p1:") { return 1 }
+        if name.hasPrefix("p2 ") || name.hasPrefix("p2-") || name.hasPrefix("p2:") { return 2 }
+        if name.hasPrefix("p3 ") || name.hasPrefix("p3-") || name.hasPrefix("p3:") { return 3 }
+        if name.hasPrefix("p4 ") || name.hasPrefix("p4-") || name.hasPrefix("p4:") { return 4 }
+        return nil
+    }
+||||||| ancestor
+=======
+    
+    // Sentinel UUID for "Uncategorized" state
+    private let uncategorizedID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    
+    private func categoryForPriority(_ priority: Int) -> CategoryDTO? {
+        categories.first { category in
+            let name = category.name.lowercased()
+            // Match "p1 ", "p1-", "p1:" patterns at the start of the name
+            return name.hasPrefix("p\(priority) ") || 
+                   name.hasPrefix("p\(priority)-") || 
+                   name.hasPrefix("p\(priority):")
+        }
+    }
+    
+    private func assignCategory(_ category: CategoryDTO?) {
+        selected = category
+        onAssign(category)
+    }
+    
+    private func getPriority(for category: CategoryDTO) -> Int? {
+        let name = category.name.lowercased()
+        // Check for "p1 ", "p1-", "p1:" patterns at the start
+        if name.hasPrefix("p1 ") || name.hasPrefix("p1-") || name.hasPrefix("p1:") { return 1 }
+        if name.hasPrefix("p2 ") || name.hasPrefix("p2-") || name.hasPrefix("p2:") { return 2 }
+        if name.hasPrefix("p3 ") || name.hasPrefix("p3-") || name.hasPrefix("p3:") { return 3 }
+        if name.hasPrefix("p4 ") || name.hasPrefix("p4-") || name.hasPrefix("p4:") { return 4 }
+        return nil
+    }
+>>>>>>> theirs
 
     var body: some View {
+<<<<<<< ours
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Category badge at the top
+                HStack {
+                    Spacer()
+                    if let cat = categories.first(where: { $0.id == message.userCategoryId }) {
+                        Label {
+                            Text(cat.name)
+                                .font(.subheadline.weight(.medium))
+                        } icon: {
+                            Image(systemName: categoryIconName(for: cat))
+                                .imageScale(.medium)
+                                .foregroundStyle(categoryColor(for: cat))
+||||||| ancestor
         Form {
             Section("Headers") {
                 Text("From: \(message.from)")
@@ -348,25 +481,385 @@ struct MessageDetailView: View {
                             Image(systemName: categoryIconName(for: c))
                                 .imageScale(.medium)
                                 .foregroundStyle(categoryColor(for: c))
+=======
+        Form {
+            // Small hotkey hint at the top
+            Section {
+                Text("Hotkeys: 1-4 to categorize")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            
+            Section("Headers") {
+                Text("From: \(message.from)")
+                Text("Subject: \(message.subject ?? "(No subject)")")
+            }
+            Section("Snippet") {
+                Text(message.snippet ?? "")
+#if os(macOS)
+                    .font(.title3)
+#else
+                    .font(.body)
+#endif
+            }
+            Section("Category") {
+                Picker("Assign", selection: Binding(
+                    get: { selected?.id ?? message.userCategoryId ?? uncategorizedID },
+                    set: { newValue in
+                        if newValue == uncategorizedID {
+                            selected = nil
+                            onAssign(nil)
+                        } else {
+                            selected = categories.first(where: { $0.id == newValue })
+                            onAssign(selected)
                         }
-                        .tag(c.id)
+                    })
+                ) {
+                    Label("Uncategorized", systemImage: "tray").tag(uncategorizedID)
+                    ForEach(categories) { c in
+                        HStack {
+                            Label {
+                                Text(c.name)
+                            } icon: {
+                                Image(systemName: categoryIconName(for: c))
+                                    .imageScale(.medium)
+                                    .foregroundStyle(categoryColor(for: c))
+                            }
+                            if let priority = getPriority(for: c) {
+                                Spacer()
+                                Text("\(priority)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Color.secondary.opacity(0.2))
+                                    .cornerRadius(3)
+                            }
+>>>>>>> theirs
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(categoryColor(for: cat).opacity(0.1))
+                        .cornerRadius(8)
+                    } else {
+                        Label {
+                            Text("Uncategorized")
+                                .font(.subheadline.weight(.medium))
+                        } icon: {
+                            Image(systemName: "tray")
+                                .imageScale(.medium)
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(8)
                     }
                 }
+                .padding()
+                
+                Divider()
+                
+                // Subject
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Subject")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                    Text(message.subject ?? "(No subject)")
 #if os(macOS)
-                .controlSize(.large)
+                        .font(.title2.weight(.semibold))
+#else
+                        .font(.title3.weight(.semibold))
 #endif
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                
+                Divider()
+                
+                // Message details in a grid
+                VStack(spacing: 0) {
+                    MessageDetailRow(label: "From", value: message.from)
+                    Divider().padding(.leading)
+                    MessageDetailRow(label: "Date", value: formatDate(message.date))
+                    Divider().padding(.leading)
+                    MessageDetailRow(label: "Status", value: message.isRead ? "Read" : "Unread")
+                }
+                .background(Color(white: 0.95).opacity(0.3))
+                
+                Divider()
+                
+                // Message content
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Message")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                    
+                    if isLoadingBody {
+                        HStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Loading message...")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical)
+                    } else if let error = bodyLoadError {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Failed to load full message")
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            // Fallback to snippet
+                            if let snippet = message.snippet {
+                                Divider()
+                                    .padding(.vertical, 4)
+                                Text("Preview:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text(snippet)
+                                    .font(.callout)
+                                    .foregroundStyle(.primary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    } else if let body = messageBody {
+                        // Render HTML if available, otherwise show plain text
+                        if body.hasHTML, let html = body.html {
+                            HTMLEmailView(htmlContent: html)
+                                .frame(minHeight: 200)
+                        } else if body.hasPlainText, let plain = body.plain {
+                            Text(plain)
+#if os(macOS)
+                                .font(.body)
+#else
+                                .font(.callout)
+#endif
+                                .foregroundStyle(.primary)
+                                .textSelection(.enabled)
+                        } else {
+                            Text("(No content available)")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        // Fallback to snippet while loading
+                        Text(message.snippet ?? "(No preview available)")
+#if os(macOS)
+                            .font(.body)
+#else
+                            .font(.callout)
+#endif
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                
+                Divider()
+                
+                // Category assignment section
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Assign Category")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                        
+                        Spacer()
+                        
+                        Text("Hotkeys: 1-4")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    
+                    Picker("Category", selection: Binding(
+                        get: { selected?.id ?? message.userCategoryId ?? uncategorizedID },
+                        set: { newValue in
+                            if newValue == uncategorizedID {
+                                selected = nil
+                                onAssign(nil)
+                            } else {
+                                selected = categories.first(where: { $0.id == newValue })
+                                onAssign(selected)
+                            }
+                        })
+                    ) {
+                        Label("Uncategorized", systemImage: "tray").tag(uncategorizedID)
+                        ForEach(categories) { c in
+                            HStack {
+                                Label {
+                                    Text(c.name)
+                                } icon: {
+                                    Image(systemName: categoryIconName(for: c))
+                                        .imageScale(.medium)
+                                        .foregroundStyle(categoryColor(for: c))
+                                }
+                                if let priority = getPriority(for: c) {
+                                    Spacer()
+                                    Text("\(priority)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(Color.secondary.opacity(0.2))
+                                        .cornerRadius(3)
+                                }
+                            }
+                            .tag(c.id)
+                        }
+                    }
+#if os(macOS)
+                    .pickerStyle(.menu)
+                    .controlSize(.large)
+#else
+                    .pickerStyle(.menu)
+#endif
+                }
+                .padding()
             }
         }
         .navigationTitle("Message")
         .onAppear {
             selected = categories.first(where: { $0.id == message.userCategoryId })
+            // Auto-load full message on appear
+            if !hasLoadedBody {
+                Task {
+                    await loadFullMessage()
+                }
+            }
         }
+        .onChange(of: message.id) { _, newId in
+            // Reset and load when message changes
+            messageBody = nil
+            bodyLoadError = nil
+            hasLoadedBody = false
+            Task {
+                await loadFullMessage()
+            }
+        }
+        .onKeyPress("1") {
+            if let p1 = categoryForPriority(1) {
+                assignCategory(p1)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("2") {
+            if let p2 = categoryForPriority(2) {
+                assignCategory(p2)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("3") {
+            if let p3 = categoryForPriority(3) {
+                assignCategory(p3)
+                return .handled
+            }
+            return .ignored
+        }
+<<<<<<< ours
+        .onKeyPress("4") {
+            if let p4 = categoryForPriority(4) {
+                assignCategory(p4)
+                return .handled
+            }
+            return .ignored
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    private func loadFullMessage() async {
+        guard !hasLoadedBody else { return }
+        
+        isLoadingBody = true
+        bodyLoadError = nil
+        
+        do {
+            let body = try await gmailService.getMessageBody(id: message.id)
+            messageBody = body
+            hasLoadedBody = true
+        } catch {
+            bodyLoadError = error.localizedDescription
+        }
+        
+        isLoadingBody = false
+    }
+}
+
+// Helper view for detail rows
+struct MessageDetailRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 80, alignment: .leading)
+            
+            Text(value)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+||||||| ancestor
+=======
+        .onKeyPress("1") {
+            if let p1 = categoryForPriority(1) {
+                assignCategory(p1)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("2") {
+            if let p2 = categoryForPriority(2) {
+                assignCategory(p2)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("3") {
+            if let p3 = categoryForPriority(3) {
+                assignCategory(p3)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("4") {
+            if let p4 = categoryForPriority(4) {
+                assignCategory(p4)
+                return .handled
+            }
+            return .ignored
+        }
+>>>>>>> theirs
     }
 }
 
 struct CategoriesView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = CategoriesViewModel()
+    @State private var showingResetConfirmation = false
 
     var body: some View {
         List {
@@ -401,6 +894,38 @@ struct CategoriesView: View {
             }
         }
         .navigationTitle("Categories")
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    showingResetConfirmation = true
+                } label: {
+                    Label("Reset to P1-P4", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        .alert("Reset Categories?", isPresented: $showingResetConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                do {
+                    try SeedCategoryLoader.resetToP1P4System(modelContext)
+                    try viewModel.load(context: modelContext)
+                } catch {
+                    viewModel.errorMessage = error.localizedDescription
+                }
+            }
+        } message: {
+            Text("This will delete all existing categories and replace them with the P1-P4 priority system. Existing email categorizations will be cleared.")
+        }
+        .alert("Error", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("OK") { viewModel.errorMessage = nil }
+        } message: {
+            if let error = viewModel.errorMessage {
+                Text(error)
+            }
+        }
         .task {
             try? viewModel.load(context: modelContext)
         }
@@ -409,6 +934,146 @@ struct CategoriesView: View {
 #endif
     }
 }
+
+// MARK: - HTML Email Viewer
+
+#if os(macOS)
+import WebKit
+
+struct HTMLEmailView: NSViewRepresentable {
+    let htmlContent: String
+    
+    func makeNSView(context: Context) -> WKWebView {
+        let webView = WKWebView()
+        webView.setValue(false, forKey: "drawsBackground") // Transparent background
+        return webView
+    }
+    
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        let styledHTML = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: #000;
+                    margin: 0;
+                    padding: 16px;
+                    background: transparent;
+                }
+                img {
+                    max-width: 100%;
+                    height: auto;
+                    display: none; /* Hide images as requested */
+                }
+                a {
+                    color: #007AFF;
+                    text-decoration: none;
+                }
+                a:hover {
+                    text-decoration: underline;
+                }
+                blockquote {
+                    border-left: 3px solid #ccc;
+                    margin-left: 0;
+                    padding-left: 16px;
+                    color: #666;
+                }
+                pre, code {
+                    background: #f5f5f5;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                    font-family: 'SF Mono', Monaco, Menlo, monospace;
+                    font-size: 13px;
+                }
+                pre {
+                    padding: 12px;
+                    overflow-x: auto;
+                }
+            </style>
+        </head>
+        <body>
+            \(htmlContent)
+        </body>
+        </html>
+        """
+        webView.loadHTMLString(styledHTML, baseURL: nil)
+    }
+}
+#else
+import WebKit
+
+struct HTMLEmailView: UIViewRepresentable {
+    let htmlContent: String
+    
+    func makeUIView(context: Context) -> WKWebView {
+        let webView = WKWebView()
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        return webView
+    }
+    
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        let styledHTML = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+                    font-size: 16px;
+                    line-height: 1.6;
+                    color: #000;
+                    margin: 0;
+                    padding: 16px;
+                    background: transparent;
+                }
+                img {
+                    max-width: 100%;
+                    height: auto;
+                    display: none; /* Hide images as requested */
+                }
+                a {
+                    color: #007AFF;
+                    text-decoration: none;
+                }
+                a:hover {
+                    text-decoration: underline;
+                }
+                blockquote {
+                    border-left: 3px solid #ccc;
+                    margin-left: 0;
+                    padding-left: 16px;
+                    color: #666;
+                }
+                pre, code {
+                    background: #f5f5f5;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                    font-family: 'SF Mono', Monaco, Menlo, monospace;
+                    font-size: 14px;
+                }
+                pre {
+                    padding: 12px;
+                    overflow-x: auto;
+                }
+            </style>
+        </head>
+        <body>
+            \(htmlContent)
+        </body>
+        </html>
+        """
+        webView.loadHTMLString(styledHTML, baseURL: nil)
+    }
+}
+#endif
 
 #Preview("Inbox") {
     let container = try! ModelContainer(for: Message.self, Category.self, TrainingExample.self, SyncState.self,
