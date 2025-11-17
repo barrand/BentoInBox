@@ -4,6 +4,18 @@
    <FileRef
       location = "self:">
    </FileRef>
+<<<<<<< ours
+||||||| ancestor
+   <FileRef
+      location = "group:BentoInbox.entitlements">
+   </FileRef>
+   <FileRef
+      location = "group:BentoInbox 2.entitlements">
+   </FileRef>
+   <FileRef
+      location = "group:BentoInbox 3.entitlements">
+   </FileRef>
+=======
    <FileRef
       location = "group:TRAINING_FEATURE.md">
    </FileRef>
@@ -40,4 +52,5 @@
    <FileRef
       location = "group:STEP_2_CATEGORIES.md">
    </FileRef>
+>>>>>>> theirs
 </Workspace>
