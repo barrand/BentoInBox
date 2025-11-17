@@ -20,6 +20,7 @@ struct RootView: View {
     var body: some View {
         Group {
             if appState.isSignedIn {
+                // Training happens naturally in the inbox via MessageDetailView
                 InboxView(viewModel: inboxVM)
             } else {
                 SignInView(viewModel: signInVM)

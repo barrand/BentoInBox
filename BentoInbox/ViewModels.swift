@@ -83,7 +83,26 @@ final class InboxViewModel: ObservableObject {
     func assign(messageId: String, to categoryId: UUID?, context: ModelContext) throws {
         let useCase = AssignCategoryUseCase(messages: messageRepo, training: SwiftDataTrainingRepository())
         try useCase.execute(messageId: messageId, categoryId: categoryId, context: context)
-        try load(context: context)
+        
+        // Re-fetch just this one message to get updated data and update the array
+        if let index = messages.firstIndex(where: { $0.id == messageId }),
+           let updated = try? messageRepo.fetchMessage(id: messageId, context: context) {
+            let updatedDTO = MessageDTO(
+                id: updated.id,
+                date: updated.date,
+                from: updated.from,
+                subject: updated.subject,
+                snippet: updated.snippet,
+                isRead: updated.isRead,
+                userCategoryId: updated.userCategoryId,
+                predictedCategoryId: updated.predictedCategoryId,
+                predictedConfidence: updated.predictedConfidence
+            )
+            // Create a new array to ensure SwiftUI detects the change
+            var updatedMessages = messages
+            updatedMessages[index] = updatedDTO
+            messages = updatedMessages
+        }
     }
 }
 

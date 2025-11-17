@@ -37,4 +37,7 @@
    <FileRef
       location = "group:FRESH_START.md">
    </FileRef>
+   <FileRef
+      location = "group:STEP_2_CATEGORIES.md">
+   </FileRef>
 </Workspace>

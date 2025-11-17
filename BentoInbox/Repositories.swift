@@ -58,6 +58,7 @@ protocol MessageRepository {
     func fetchInbox(limit: Int, in context: ModelContext) throws -> [MessageDTO]
     func fetchUncategorized(limit: Int, in context: ModelContext) throws -> [MessageDTO]
     func fetchByCategory(_ categoryId: UUID, limit: Int, in context: ModelContext) throws -> [MessageDTO]
+    func fetchMessage(id: String, context: ModelContext) throws -> Message
     func updateUserCategory(messageId: String, categoryId: UUID?, in context: ModelContext) throws
     func existingIds(in context: ModelContext) throws -> Set<String>
     func fetchForTraining(limit: Int, in context: ModelContext) throws -> [MessageDTO]
@@ -155,6 +156,13 @@ final class SwiftDataMessageRepository: MessageRepository {
     func countUncategorized(in context: ModelContext) throws -> Int {
         let descriptor = FetchDescriptor<Message>(predicate: #Predicate { $0.userCategoryId == nil })
         return try context.fetchCount(descriptor)
+    }
+    
+    func fetchMessage(id: String, context: ModelContext) throws -> Message {
+        guard let message = try fetchModel(by: id, in: context) else {
+            throw NSError(domain: "MessageRepository", code: 404, userInfo: [NSLocalizedDescriptionKey: "Message not found"])
+        }
+        return message
     }
 
     private func fetchModel(by id: String, in context: ModelContext) throws -> Message? {

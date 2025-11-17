@@ -119,6 +119,38 @@ struct InboxView: View {
             }
         }
         .listStyle(.inset)
+        .onKeyPress("1") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(1) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
+        .onKeyPress("2") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(2) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
+        .onKeyPress("3") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(3) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
+        .onKeyPress("4") {
+            guard let messageId = selectedMessageId,
+                  let category = categoryForPriority(4) else {
+                return .ignored
+            }
+            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+            return .handled
+        }
         .overlay {
             if viewModel.isRefreshing {
                 ProgressView().controlSize(.large)
@@ -189,12 +221,6 @@ struct InboxView: View {
                     Label("Categories", systemImage: "tag")
                 }
                 
-                NavigationLink {
-                    TrainingView()
-                } label: {
-                    Label("Train Model", systemImage: "brain")
-                }
-                
                 Menu {
                     if let email = userEmail {
                         Text(email)
@@ -256,6 +282,26 @@ struct InboxView: View {
         if tag == "uncat" { return .uncategorized }
         if let uuid = UUID(uuidString: tag) { return .category(uuid) }
         return .all
+    }
+    
+    private func categoryForPriority(_ priority: Int) -> CategoryDTO? {
+        viewModel.categories.first { category in
+            let name = category.name.lowercased()
+            // Match "p1 ", "p1-", "p1:" patterns at the start of the name
+            return name.hasPrefix("p\(priority) ") ||
+                   name.hasPrefix("p\(priority)-") ||
+                   name.hasPrefix("p\(priority):")
+        }
+    }
+    
+    private func getPriority(for category: CategoryDTO) -> Int? {
+        let name = category.name.lowercased()
+        // Check for "p1 ", "p1-", "p1:" patterns at the start
+        if name.hasPrefix("p1 ") || name.hasPrefix("p1-") || name.hasPrefix("p1:") { return 1 }
+        if name.hasPrefix("p2 ") || name.hasPrefix("p2-") || name.hasPrefix("p2:") { return 2 }
+        if name.hasPrefix("p3 ") || name.hasPrefix("p3-") || name.hasPrefix("p3:") { return 3 }
+        if name.hasPrefix("p4 ") || name.hasPrefix("p4-") || name.hasPrefix("p4:") { return 4 }
+        return nil
     }
 }
 
@@ -326,9 +372,41 @@ struct MessageDetailView: View {
     
     // Sentinel UUID for "Uncategorized" state
     private let uncategorizedID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    
+    private func categoryForPriority(_ priority: Int) -> CategoryDTO? {
+        categories.first { category in
+            let name = category.name.lowercased()
+            // Match "p1 ", "p1-", "p1:" patterns at the start of the name
+            return name.hasPrefix("p\(priority) ") || 
+                   name.hasPrefix("p\(priority)-") || 
+                   name.hasPrefix("p\(priority):")
+        }
+    }
+    
+    private func assignCategory(_ category: CategoryDTO?) {
+        selected = category
+        onAssign(category)
+    }
+    
+    private func getPriority(for category: CategoryDTO) -> Int? {
+        let name = category.name.lowercased()
+        // Check for "p1 ", "p1-", "p1:" patterns at the start
+        if name.hasPrefix("p1 ") || name.hasPrefix("p1-") || name.hasPrefix("p1:") { return 1 }
+        if name.hasPrefix("p2 ") || name.hasPrefix("p2-") || name.hasPrefix("p2:") { return 2 }
+        if name.hasPrefix("p3 ") || name.hasPrefix("p3-") || name.hasPrefix("p3:") { return 3 }
+        if name.hasPrefix("p4 ") || name.hasPrefix("p4-") || name.hasPrefix("p4:") { return 4 }
+        return nil
+    }
 
     var body: some View {
         Form {
+            // Small hotkey hint at the top
+            Section {
+                Text("Hotkeys: 1-4 to categorize")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            
             Section("Headers") {
                 Text("From: \(message.from)")
                 Text("Subject: \(message.subject ?? "(No subject)")")
@@ -356,12 +434,24 @@ struct MessageDetailView: View {
                 ) {
                     Label("Uncategorized", systemImage: "tray").tag(uncategorizedID)
                     ForEach(categories) { c in
-                        Label {
-                            Text(c.name)
-                        } icon: {
-                            Image(systemName: categoryIconName(for: c))
-                                .imageScale(.medium)
-                                .foregroundStyle(categoryColor(for: c))
+                        HStack {
+                            Label {
+                                Text(c.name)
+                            } icon: {
+                                Image(systemName: categoryIconName(for: c))
+                                    .imageScale(.medium)
+                                    .foregroundStyle(categoryColor(for: c))
+                            }
+                            if let priority = getPriority(for: c) {
+                                Spacer()
+                                Text("\(priority)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Color.secondary.opacity(0.2))
+                                    .cornerRadius(3)
+                            }
                         }
                         .tag(c.id)
                     }
@@ -374,6 +464,34 @@ struct MessageDetailView: View {
         .navigationTitle("Message")
         .onAppear {
             selected = categories.first(where: { $0.id == message.userCategoryId })
+        }
+        .onKeyPress("1") {
+            if let p1 = categoryForPriority(1) {
+                assignCategory(p1)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("2") {
+            if let p2 = categoryForPriority(2) {
+                assignCategory(p2)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("3") {
+            if let p3 = categoryForPriority(3) {
+                assignCategory(p3)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("4") {
+            if let p4 = categoryForPriority(4) {
+                assignCategory(p4)
+                return .handled
+            }
+            return .ignored
         }
     }
 }
@@ -454,101 +572,6 @@ struct CategoriesView: View {
 #if os(iOS)
         .preferredColorScheme(.dark)
 #endif
-    }
-}
-
-struct TrainingView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<Message> { $0.userCategoryId == nil }, sort: \Message.date, order: .reverse)
-    private var uncategorizedMessages: [Message]
-    
-    @State private var currentIndex = 0
-    
-    var body: some View {
-        VStack {
-            if uncategorizedMessages.isEmpty {
-                Text("No uncategorized messages")
-                    .font(.title)
-                    .foregroundStyle(.secondary)
-            } else if currentIndex < uncategorizedMessages.count {
-                let message = uncategorizedMessages[currentIndex]
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text("Email \(currentIndex + 1) of \(uncategorizedMessages.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        Divider()
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Date:")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(message.date, style: .date)
-                            Text(message.date, style: .time)
-                        }
-                        
-                        Divider()
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("From:")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(message.from)
-                                .font(.body)
-                        }
-                        
-                        Divider()
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Subject:")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(message.subject ?? "(No subject)")
-                                .font(.headline)
-                        }
-                        
-                        Divider()
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Content:")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(message.snippet ?? "(No content)")
-                                .font(.body)
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                
-                Divider()
-                
-                HStack {
-                    Button("Previous") {
-                        if currentIndex > 0 {
-                            currentIndex -= 1
-                        }
-                    }
-                    .disabled(currentIndex == 0)
-                    
-                    Spacer()
-                    
-                    Button("Next") {
-                        if currentIndex < uncategorizedMessages.count - 1 {
-                            currentIndex += 1
-                        }
-                    }
-                    .disabled(currentIndex >= uncategorizedMessages.count - 1)
-                }
-                .padding()
-            } else {
-                Text("All done!")
-                    .font(.title)
-            }
-        }
-        .navigationTitle("Train Model")
     }
 }
 
