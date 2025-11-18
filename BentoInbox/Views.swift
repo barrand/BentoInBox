@@ -78,9 +78,33 @@ struct InboxView: View {
             selectedMessageId = nil
             userEmail = await gmailService.currentUserEmail()
         }
+        // Global hotkey handlers - work regardless of focus
+        .onKeyPress("1") {
+            handleCategoryHotkey(priority: 1)
+        }
+        .onKeyPress("2") {
+            handleCategoryHotkey(priority: 2)
+        }
+        .onKeyPress("3") {
+            handleCategoryHotkey(priority: 3)
+        }
+        .onKeyPress("4") {
+            handleCategoryHotkey(priority: 4)
+        }
 #if os(iOS)
         .preferredColorScheme(.dark)
 #endif
+    }
+    
+    // MARK: - Hotkey Handler
+    
+    private func handleCategoryHotkey(priority: Int) -> KeyPress.Result {
+        guard let messageId = selectedMessageId,
+              let category = categoryForPriority(priority) else {
+            return .ignored
+        }
+        try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
+        return .handled
     }
 
     // MARK: - Sidebar (List + Filters)
@@ -119,38 +143,6 @@ struct InboxView: View {
             }
         }
         .listStyle(.inset)
-        .onKeyPress("1") {
-            guard let messageId = selectedMessageId,
-                  let category = categoryForPriority(1) else {
-                return .ignored
-            }
-            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
-            return .handled
-        }
-        .onKeyPress("2") {
-            guard let messageId = selectedMessageId,
-                  let category = categoryForPriority(2) else {
-                return .ignored
-            }
-            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
-            return .handled
-        }
-        .onKeyPress("3") {
-            guard let messageId = selectedMessageId,
-                  let category = categoryForPriority(3) else {
-                return .ignored
-            }
-            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
-            return .handled
-        }
-        .onKeyPress("4") {
-            guard let messageId = selectedMessageId,
-                  let category = categoryForPriority(4) else {
-                return .ignored
-            }
-            try? viewModel.assign(messageId: messageId, to: category.id, context: modelContext)
-            return .handled
-        }
         .overlay {
             if viewModel.isRefreshing {
                 ProgressView().controlSize(.large)
@@ -371,7 +363,6 @@ struct MessageDetailView: View {
     @Environment(\.gmailService) private var gmailService
 
     @State private var selected: CategoryDTO?
-<<<<<<< ours
     @State private var messageBody: GmailMessageBody?
     @State private var isLoadingBody = false
     @State private var bodyLoadError: String?
@@ -380,16 +371,6 @@ struct MessageDetailView: View {
     // Sentinel UUID for "Uncategorized" state
     private let uncategorizedID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     
-    private func categoryForPriority(_ priority: Int) -> CategoryDTO? {
-        categories.first { category in
-            let name = category.name.lowercased()
-            // Match "p1 ", "p1-", "p1:" patterns at the start of the name
-            return name.hasPrefix("p\(priority) ") ||
-                   name.hasPrefix("p\(priority)-") ||
-                   name.hasPrefix("p\(priority):")
-        }
-    }
-    
     private func assignCategory(_ category: CategoryDTO?) {
         selected = category
         onAssign(category)
@@ -404,40 +385,8 @@ struct MessageDetailView: View {
         if name.hasPrefix("p4 ") || name.hasPrefix("p4-") || name.hasPrefix("p4:") { return 4 }
         return nil
     }
-||||||| ancestor
-=======
-    
-    // Sentinel UUID for "Uncategorized" state
-    private let uncategorizedID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
-    
-    private func categoryForPriority(_ priority: Int) -> CategoryDTO? {
-        categories.first { category in
-            let name = category.name.lowercased()
-            // Match "p1 ", "p1-", "p1:" patterns at the start of the name
-            return name.hasPrefix("p\(priority) ") || 
-                   name.hasPrefix("p\(priority)-") || 
-                   name.hasPrefix("p\(priority):")
-        }
-    }
-    
-    private func assignCategory(_ category: CategoryDTO?) {
-        selected = category
-        onAssign(category)
-    }
-    
-    private func getPriority(for category: CategoryDTO) -> Int? {
-        let name = category.name.lowercased()
-        // Check for "p1 ", "p1-", "p1:" patterns at the start
-        if name.hasPrefix("p1 ") || name.hasPrefix("p1-") || name.hasPrefix("p1:") { return 1 }
-        if name.hasPrefix("p2 ") || name.hasPrefix("p2-") || name.hasPrefix("p2:") { return 2 }
-        if name.hasPrefix("p3 ") || name.hasPrefix("p3-") || name.hasPrefix("p3:") { return 3 }
-        if name.hasPrefix("p4 ") || name.hasPrefix("p4-") || name.hasPrefix("p4:") { return 4 }
-        return nil
-    }
->>>>>>> theirs
 
     var body: some View {
-<<<<<<< ours
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // Category badge at the top
@@ -451,91 +400,6 @@ struct MessageDetailView: View {
                             Image(systemName: categoryIconName(for: cat))
                                 .imageScale(.medium)
                                 .foregroundStyle(categoryColor(for: cat))
-||||||| ancestor
-        Form {
-            Section("Headers") {
-                Text("From: \(message.from)")
-                Text("Subject: \(message.subject ?? "(No subject)")")
-            }
-            Section("Snippet") {
-                Text(message.snippet ?? "")
-#if os(macOS)
-                    .font(.title3)
-#else
-                    .font(.body)
-#endif
-            }
-            Section("Category") {
-                Picker("Assign", selection: Binding(
-                    get: { selected?.id ?? message.userCategoryId ?? UUID() },
-                    set: { newValue in
-                        selected = categories.first(where: { $0.id == newValue })
-                        onAssign(selected)
-                    })
-                ) {
-                    Label("Uncategorized", systemImage: "tray").tag(UUID())
-                    ForEach(categories) { c in
-                        Label {
-                            Text(c.name)
-                        } icon: {
-                            Image(systemName: categoryIconName(for: c))
-                                .imageScale(.medium)
-                                .foregroundStyle(categoryColor(for: c))
-=======
-        Form {
-            // Small hotkey hint at the top
-            Section {
-                Text("Hotkeys: 1-4 to categorize")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            
-            Section("Headers") {
-                Text("From: \(message.from)")
-                Text("Subject: \(message.subject ?? "(No subject)")")
-            }
-            Section("Snippet") {
-                Text(message.snippet ?? "")
-#if os(macOS)
-                    .font(.title3)
-#else
-                    .font(.body)
-#endif
-            }
-            Section("Category") {
-                Picker("Assign", selection: Binding(
-                    get: { selected?.id ?? message.userCategoryId ?? uncategorizedID },
-                    set: { newValue in
-                        if newValue == uncategorizedID {
-                            selected = nil
-                            onAssign(nil)
-                        } else {
-                            selected = categories.first(where: { $0.id == newValue })
-                            onAssign(selected)
-                        }
-                    })
-                ) {
-                    Label("Uncategorized", systemImage: "tray").tag(uncategorizedID)
-                    ForEach(categories) { c in
-                        HStack {
-                            Label {
-                                Text(c.name)
-                            } icon: {
-                                Image(systemName: categoryIconName(for: c))
-                                    .imageScale(.medium)
-                                    .foregroundStyle(categoryColor(for: c))
-                            }
-                            if let priority = getPriority(for: c) {
-                                Spacer()
-                                Text("\(priority)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Color.secondary.opacity(0.2))
-                                    .cornerRadius(3)
-                            }
->>>>>>> theirs
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -684,11 +548,10 @@ struct MessageDetailView: View {
                         get: { selected?.id ?? message.userCategoryId ?? uncategorizedID },
                         set: { newValue in
                             if newValue == uncategorizedID {
-                                selected = nil
-                                onAssign(nil)
+                                assignCategory(nil)
                             } else {
-                                selected = categories.first(where: { $0.id == newValue })
-                                onAssign(selected)
+                                let category = categories.first(where: { $0.id == newValue })
+                                assignCategory(category)
                             }
                         })
                     ) {
@@ -745,35 +608,6 @@ struct MessageDetailView: View {
                 await loadFullMessage()
             }
         }
-        .onKeyPress("1") {
-            if let p1 = categoryForPriority(1) {
-                assignCategory(p1)
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress("2") {
-            if let p2 = categoryForPriority(2) {
-                assignCategory(p2)
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress("3") {
-            if let p3 = categoryForPriority(3) {
-                assignCategory(p3)
-                return .handled
-            }
-            return .ignored
-        }
-<<<<<<< ours
-        .onKeyPress("4") {
-            if let p4 = categoryForPriority(4) {
-                assignCategory(p4)
-                return .handled
-            }
-            return .ignored
-        }
     }
     
     private func formatDate(_ date: Date) -> String {
@@ -822,37 +656,6 @@ struct MessageDetailRow: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
-||||||| ancestor
-=======
-        .onKeyPress("1") {
-            if let p1 = categoryForPriority(1) {
-                assignCategory(p1)
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress("2") {
-            if let p2 = categoryForPriority(2) {
-                assignCategory(p2)
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress("3") {
-            if let p3 = categoryForPriority(3) {
-                assignCategory(p3)
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress("4") {
-            if let p4 = categoryForPriority(4) {
-                assignCategory(p4)
-                return .handled
-            }
-            return .ignored
-        }
->>>>>>> theirs
     }
 }
 
