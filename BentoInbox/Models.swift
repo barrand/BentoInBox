@@ -124,3 +124,73 @@ final class SyncState {
     }
 }
 
+@Model
+final class EmailTag {
+    @Attribute(.unique) var id: UUID
+    var messageId: String
+    var tag: String
+    var source: String  // "llm", "user", "rule"
+    var confidence: Double
+    var createdAt: Date
+    
+    init(
+        id: UUID = UUID(),
+        messageId: String,
+        tag: String,
+        source: String = "llm",
+        confidence: Double = 0.8,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.messageId = messageId
+        self.tag = tag
+        self.source = source
+        self.confidence = confidence
+        self.createdAt = createdAt
+    }
+}
+
+@Model
+final class EmailAnalysis {
+    @Attribute(.unique) var id: UUID
+    var messageId: String
+    var summary: String
+    var intent: String  // "question", "action_required", "informational", "promotional", etc.
+    var urgency: String  // "immediate", "soon", "normal", "low"
+    var requiresResponse: Bool
+    var isActionable: Bool
+    var senderCategory: String  // "colleague", "client", "service", "marketing", "personal", "unknown"
+    var hasDeadline: Bool
+    var mentionsMoney: Bool
+    var mentionsYouDirectly: Bool
+    var createdAt: Date
+    
+    init(
+        id: UUID = UUID(),
+        messageId: String,
+        summary: String,
+        intent: String,
+        urgency: String,
+        requiresResponse: Bool,
+        isActionable: Bool,
+        senderCategory: String,
+        hasDeadline: Bool,
+        mentionsMoney: Bool,
+        mentionsYouDirectly: Bool,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.messageId = messageId
+        self.summary = summary
+        self.intent = intent
+        self.urgency = urgency
+        self.requiresResponse = requiresResponse
+        self.isActionable = isActionable
+        self.senderCategory = senderCategory
+        self.hasDeadline = hasDeadline
+        self.mentionsMoney = mentionsMoney
+        self.mentionsYouDirectly = mentionsYouDirectly
+        self.createdAt = createdAt
+    }
+}
+

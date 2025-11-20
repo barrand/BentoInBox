@@ -51,6 +51,30 @@ struct TrainingExampleDTO: Identifiable {
     let source: String
 }
 
+struct EmailTagDTO: Identifiable {
+    let id: UUID
+    let messageId: String
+    let tag: String
+    let source: String
+    let confidence: Double
+    let createdAt: Date
+}
+
+struct EmailAnalysisDTO: Identifiable {
+    let id: UUID
+    let messageId: String
+    let summary: String
+    let intent: String
+    let urgency: String
+    let requiresResponse: Bool
+    let isActionable: Bool
+    let senderCategory: String
+    let hasDeadline: Bool
+    let mentionsMoney: Bool
+    let mentionsYouDirectly: Bool
+    let createdAt: Date
+}
+
 // Repositories
 
 protocol MessageRepository {
@@ -73,6 +97,16 @@ protocol CategoryRepository {
 protocol TrainingRepository {
     func recordExample(messageId: String, categoryId: UUID, source: String, in context: ModelContext) throws
     func examples(in context: ModelContext) throws -> [TrainingExampleDTO]
+}
+
+protocol EmailTagRepository {
+    func saveTags(_ tags: [String], for messageId: String, source: String, in context: ModelContext) throws
+    func fetchTags(for messageId: String, in context: ModelContext) throws -> [EmailTagDTO]
+}
+
+protocol EmailAnalysisRepository {
+    func saveAnalysis(_ analysis: LLMEmailAnalysis, for messageId: String, in context: ModelContext) throws
+    func fetchAnalysis(for messageId: String, in context: ModelContext) throws -> EmailAnalysisDTO?
 }
 
 final class SwiftDataMessageRepository: MessageRepository {
@@ -203,6 +237,79 @@ final class SwiftDataTrainingRepository: TrainingRepository {
     func examples(in context: ModelContext) throws -> [TrainingExampleDTO] {
         let models = try context.fetch(FetchDescriptor<TrainingExample>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))
         return models.map { TrainingExampleDTO(id: $0.id, messageId: $0.messageId, categoryId: $0.categoryId, createdAt: $0.createdAt, source: $0.source) }
+    }
+}
+
+final class SwiftDataEmailTagRepository: EmailTagRepository {
+    func saveTags(_ tags: [String], for messageId: String, source: String, in context: ModelContext) throws {
+        // Delete existing LLM tags for this message to avoid duplicates
+        let descriptor = FetchDescriptor<EmailTag>(predicate: #Predicate { $0.messageId == messageId && $0.source == "llm" })
+        let existing = try context.fetch(descriptor)
+        for tag in existing {
+            context.delete(tag)
+        }
+        
+        // Insert new tags
+        for tagName in tags {
+            let tag = EmailTag(messageId: messageId, tag: tagName, source: source)
+            context.insert(tag)
+        }
+        try context.save()
+    }
+    
+    func fetchTags(for messageId: String, in context: ModelContext) throws -> [EmailTagDTO] {
+        let descriptor = FetchDescriptor<EmailTag>(
+            predicate: #Predicate { $0.messageId == messageId },
+            sortBy: [SortDescriptor(\.tag)]
+        )
+        let models = try context.fetch(descriptor)
+        return models.map { EmailTagDTO(id: $0.id, messageId: $0.messageId, tag: $0.tag, source: $0.source, confidence: $0.confidence, createdAt: $0.createdAt) }
+    }
+}
+
+final class SwiftDataEmailAnalysisRepository: EmailAnalysisRepository {
+    func saveAnalysis(_ analysis: LLMEmailAnalysis, for messageId: String, in context: ModelContext) throws {
+        // Delete existing analysis for this message
+        let descriptor = FetchDescriptor<EmailAnalysis>(predicate: #Predicate { $0.messageId == messageId })
+        let existing = try context.fetch(descriptor)
+        for old in existing {
+            context.delete(old)
+        }
+        
+        // Insert new analysis
+        let model = EmailAnalysis(
+            messageId: messageId,
+            summary: analysis.summary,
+            intent: analysis.intent,
+            urgency: analysis.urgency,
+            requiresResponse: analysis.requiresResponse,
+            isActionable: analysis.isActionable,
+            senderCategory: analysis.senderCategory,
+            hasDeadline: analysis.hasDeadline,
+            mentionsMoney: analysis.mentionsMoney,
+            mentionsYouDirectly: analysis.mentionsYouDirectly
+        )
+        context.insert(model)
+        try context.save()
+    }
+    
+    func fetchAnalysis(for messageId: String, in context: ModelContext) throws -> EmailAnalysisDTO? {
+        let descriptor = FetchDescriptor<EmailAnalysis>(predicate: #Predicate { $0.messageId == messageId })
+        guard let model = try context.fetch(descriptor).first else { return nil }
+        return EmailAnalysisDTO(
+            id: model.id,
+            messageId: model.messageId,
+            summary: model.summary,
+            intent: model.intent,
+            urgency: model.urgency,
+            requiresResponse: model.requiresResponse,
+            isActionable: model.isActionable,
+            senderCategory: model.senderCategory,
+            hasDeadline: model.hasDeadline,
+            mentionsMoney: model.mentionsMoney,
+            mentionsYouDirectly: model.mentionsYouDirectly,
+            createdAt: model.createdAt
+        )
     }
 }
 

@@ -311,13 +311,28 @@ struct MessageRow: View {
                 .frame(width: 8, height: 8)
 #endif
             VStack(alignment: .leading, spacing: 3) {
-                Text(message.subject ?? "(No subject)")
+                HStack(spacing: 6) {
+                    Text(message.subject ?? "(No subject)")
 #if os(macOS)
-                    .font(.title3.weight(.semibold))
+                        .font(.title3.weight(.semibold))
 #else
-                    .font(.headline)
+                        .font(.headline)
 #endif
-                    .lineLimit(1)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    // Show sender name/email
+                    Text(extractSenderName(from: message.from))
+#if os(macOS)
+                        .font(.caption)
+#else
+                        .font(.caption2)
+#endif
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                
                 Text(message.snippet ?? "")
 #if os(macOS)
                     .font(.body)
@@ -353,6 +368,19 @@ struct MessageRow: View {
             }
         }
     }
+    
+    /// Extract a display-friendly sender name from "Name <email>" format
+    private func extractSenderName(from sender: String) -> String {
+        // If format is "Name <email@domain.com>", extract "Name"
+        if let angleStart = sender.range(of: "<")?.lowerBound {
+            let name = String(sender[sender.startIndex..<angleStart]).trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty {
+                return name
+            }
+        }
+        // Otherwise, just show the email (or truncate if too long)
+        return sender
+    }
 }
 
 struct MessageDetailView: View {
@@ -361,12 +389,19 @@ struct MessageDetailView: View {
     let onAssign: (CategoryDTO?) -> Void
     
     @Environment(\.gmailService) private var gmailService
+    @Environment(\.llmAnalysisService) private var llmAnalysisService
+    @Environment(\.modelContext) private var modelContext
 
     @State private var selected: CategoryDTO?
     @State private var messageBody: GmailMessageBody?
     @State private var isLoadingBody = false
     @State private var bodyLoadError: String?
     @State private var hasLoadedBody = false
+    
+    // LLM Analysis state
+    @State private var emailTags: [EmailTagDTO] = []
+    @State private var emailAnalysis: EmailAnalysisDTO?
+    @State private var isAnalyzing = false
     
     // Sentinel UUID for "Uncategorized" state
     private let uncategorizedID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
@@ -529,6 +564,86 @@ struct MessageDetailView: View {
                 
                 Divider()
                 
+                // LLM Analysis Section
+                if llmAnalysisService.isAvailable() {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Label("AI Analysis", systemImage: "sparkles")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                            
+                            Spacer()
+                            
+                            if isAnalyzing {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Analyzing...")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        
+                        // Tags
+                        if !emailTags.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Tags")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                
+                                FlowLayout(spacing: 6) {
+                                    ForEach(emailTags) { tag in
+                                        Text(tag.tag)
+                                            .font(.caption)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(tagColor(for: tag.tag))
+                                            .foregroundStyle(.white)
+                                            .cornerRadius(6)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Summary
+                        if let analysis = emailAnalysis {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Summary")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                
+                                Text(analysis.summary)
+                                    .font(.callout)
+                                    .foregroundStyle(.primary)
+                                
+                                // Quick insights
+                                HStack(spacing: 12) {
+                                    if analysis.requiresResponse {
+                                        Label("Response needed", systemImage: "arrowshape.turn.up.left.fill")
+                                            .font(.caption2)
+                                            .foregroundStyle(.orange)
+                                    }
+                                    if analysis.isActionable {
+                                        Label("Action required", systemImage: "checkmark.circle.fill")
+                                            .font(.caption2)
+                                            .foregroundStyle(.blue)
+                                    }
+                                    if analysis.hasDeadline {
+                                        Label("Has deadline", systemImage: "clock.fill")
+                                            .font(.caption2)
+                                            .foregroundStyle(.red)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                }
+                
+                Divider()
+                
                 // Category assignment section
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -592,10 +707,11 @@ struct MessageDetailView: View {
         .navigationTitle("Message")
         .onAppear {
             selected = categories.first(where: { $0.id == message.userCategoryId })
-            // Auto-load full message on appear
+            // Auto-load full message and analysis on appear
             if !hasLoadedBody {
                 Task {
                     await loadFullMessage()
+                    await loadOrAnalyzeEmail()
                 }
             }
         }
@@ -604,8 +720,89 @@ struct MessageDetailView: View {
             messageBody = nil
             bodyLoadError = nil
             hasLoadedBody = false
+            emailTags = []
+            emailAnalysis = nil
             Task {
                 await loadFullMessage()
+                await loadOrAnalyzeEmail()
+            }
+        }
+    }
+    
+    private func tagColor(for tag: String) -> Color {
+        switch tag.lowercased() {
+        case "personal-sender": return .pink       // ⭐️ Real person - high importance!
+        case "urgent": return .red                 // Time-sensitive
+        case "question": return .orange            // Someone asking you something
+        case "action-required": return .orange     // You need to do something
+        case "meeting", "calendar": return .blue   // Meetings and events
+        case "travel": return .purple              // Travel and reservations
+        case "financial", "invoice": return .green // Money and payments
+        case "work-project", "project": return .indigo // Work projects
+        case "newsletter": return .gray            // Newsletters
+        case "receipt": return .teal               // Purchase confirmations
+        case "social": return .cyan                // Social media
+        case "general": return .secondary          // Default/general
+        default: return .secondary                 // Fallback for any unexpected tags
+        }
+    }
+    
+    private func loadOrAnalyzeEmail() async {
+        let tagRepo = SwiftDataEmailTagRepository()
+        let analysisRepo = SwiftDataEmailAnalysisRepository()
+        
+        // Try to load existing analysis
+        do {
+            let tags = try tagRepo.fetchTags(for: message.id, in: modelContext)
+            let analysis = try analysisRepo.fetchAnalysis(for: message.id, in: modelContext)
+            
+            if !tags.isEmpty || analysis != nil {
+                // We have cached analysis
+                await MainActor.run {
+                    self.emailTags = tags
+                    self.emailAnalysis = analysis
+                }
+                return
+            }
+        } catch {
+            print("Error loading analysis: \(error)")
+        }
+        
+        // No cached analysis - run LLM analysis
+        guard llmAnalysisService.isAvailable(),
+              let body = messageBody else {
+            return
+        }
+        
+        await MainActor.run {
+            isAnalyzing = true
+        }
+        
+        do {
+            let bodyText = body.plain ?? body.displayText
+            let analysis = try await llmAnalysisService.analyzeEmail(
+                subject: message.subject,
+                body: bodyText,
+                from: message.from
+            )
+            
+            // Save to database
+            try tagRepo.saveTags(analysis.tags, for: message.id, source: "llm", in: modelContext)
+            try analysisRepo.saveAnalysis(analysis, for: message.id, in: modelContext)
+            
+            // Update UI
+            let tags = try tagRepo.fetchTags(for: message.id, in: modelContext)
+            let analysisDTO = try analysisRepo.fetchAnalysis(for: message.id, in: modelContext)
+            
+            await MainActor.run {
+                self.emailTags = tags
+                self.emailAnalysis = analysisDTO
+                self.isAnalyzing = false
+            }
+        } catch {
+            print("Error analyzing email: \(error)")
+            await MainActor.run {
+                self.isAnalyzing = false
             }
         }
     }
@@ -662,38 +859,143 @@ struct MessageDetailRow: View {
 struct CategoriesView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = CategoriesViewModel()
+    @EnvironmentObject private var ollamaModelManager: OllamaModelManager
+    
     @State private var showingResetConfirmation = false
+    @State private var showingClearCategoriesConfirmation = false
+    @State private var showingClearTagsConfirmation = false
+    @State private var useOllama = UserDefaults.standard.bool(forKey: "useOllama")
+    @State private var ollamaRunning = false
 
     var body: some View {
         List {
-            ForEach(viewModel.categories) { c in
-                HStack(spacing: 10) {
-                    ZStack {
-                        // Neutral background; only icon is colored
-                        Circle()
-                            .fill(Color.secondary.opacity(0.15))
-#if os(macOS)
-                            .frame(width: 28, height: 28)
-#else
-                            .frame(width: 24, height: 24)
-#endif
-                        Image(systemName: categoryIconName(for: c))
-                            .imageScale(.medium)
-                            .foregroundStyle(categoryColor(for: c))
-                    }
-                    Text(c.name)
-#if os(macOS)
-                        .font(.title3)
-#else
-                        .font(.body)
-#endif
-                    Spacer()
-                    if c.isSystem {
-                        Text("System")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            // Ollama Settings section
+            Section {
+                Toggle(isOn: $useOllama) {
+                    HStack {
+                        Label("Use Ollama for Analysis", systemImage: "cpu")
+                        if ollamaRunning {
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.caption2)
+                        } else if useOllama {
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(.red)
+                                .font(.caption2)
+                        }
                     }
                 }
+                .onChange(of: useOllama) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: "useOllama")
+                }
+                
+                if useOllama {
+                    if ollamaRunning && !ollamaModelManager.availableModels.isEmpty {
+                        Picker("Model", selection: Binding(
+                            get: { ollamaModelManager.selectedModel },
+                            set: { newModel in
+                                ollamaModelManager.selectedModel = newModel
+                                UserDefaults.standard.set(newModel, forKey: "ollamaModel")
+                            }
+                        )) {
+                            ForEach(ollamaModelManager.availableModels) { model in
+                                HStack {
+                                    Text(model.name)
+                                    Spacer()
+                                    Text(formatSize(model.size))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .tag(model.name)
+                            }
+                        }
+                        
+                        Text("\(ollamaModelManager.availableModels.count) models installed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if useOllama {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Text("Ollama not running")
+                                .font(.caption)
+                        }
+                        
+                        Button("Check Ollama Status") {
+                            Task {
+                                await checkOllama()
+                            }
+                        }
+                        .font(.caption)
+                    }
+                }
+            } header: {
+                Text("LLM Settings")
+            } footer: {
+                if useOllama && ollamaRunning {
+                    Text("Restart app after changing models for changes to take effect.")
+                        .font(.caption)
+                } else if useOllama && !ollamaRunning {
+                    Text("Make sure Ollama is running with: ollama serve")
+                        .font(.caption)
+                }
+            }
+            
+            // Management section
+            Section {
+                Button(role: .destructive) {
+                    showingClearCategoriesConfirmation = true
+                } label: {
+                    Label("Clear All Email Categories", systemImage: "trash")
+                        .foregroundStyle(.red)
+                }
+                
+                Button(role: .destructive) {
+                    showingClearTagsConfirmation = true
+                } label: {
+                    Label("Clear All LLM Tags & Analysis", systemImage: "tag.slash")
+                        .foregroundStyle(.orange)
+                }
+            } header: {
+                Text("Data Management")
+            } footer: {
+                Text("These actions will not delete emails, only remove categorizations and tags.")
+                    .font(.caption)
+            }
+            
+            // Categories list
+            Section {
+                ForEach(viewModel.categories) { c in
+                    HStack(spacing: 10) {
+                        ZStack {
+                            // Neutral background; only icon is colored
+                            Circle()
+                                .fill(Color.secondary.opacity(0.15))
+#if os(macOS)
+                                .frame(width: 28, height: 28)
+#else
+                                .frame(width: 24, height: 24)
+#endif
+                            Image(systemName: categoryIconName(for: c))
+                                .imageScale(.medium)
+                                .foregroundStyle(categoryColor(for: c))
+                        }
+                        Text(c.name)
+#if os(macOS)
+                            .font(.title3)
+#else
+                            .font(.body)
+#endif
+                        Spacer()
+                        if c.isSystem {
+                            Text("System")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("Categories")
             }
         }
         .navigationTitle("Categories")
@@ -731,10 +1033,132 @@ struct CategoriesView: View {
         }
         .task {
             try? viewModel.load(context: modelContext)
+            await checkOllama()
         }
 #if os(iOS)
         .preferredColorScheme(.dark)
 #endif
+    }
+    
+    // MARK: - Ollama Helpers
+    
+    private func checkOllama() async {
+        ollamaRunning = await ollamaModelManager.isOllamaRunning()
+        if ollamaRunning {
+            await ollamaModelManager.fetchAvailableModels()
+        }
+    }
+    
+    private func formatSize(_ bytes: Int64) -> String {
+        let gb = Double(bytes) / 1_000_000_000
+        if gb >= 1.0 {
+            return String(format: "%.1f GB", gb)
+        } else {
+            let mb = Double(bytes) / 1_000_000
+            return String(format: "%.0f MB", mb)
+        }
+    }
+    
+    // MARK: - Clear Functions
+    
+    private func clearAllEmailCategories() {
+        do {
+            // Fetch all messages
+            let descriptor = FetchDescriptor<Message>()
+            let messages = try modelContext.fetch(descriptor)
+            
+            // Clear userCategoryId for all messages
+            for message in messages {
+                message.userCategoryId = nil
+            }
+            
+            // Save changes
+            try modelContext.save()
+            
+            print("✅ Cleared categories from \(messages.count) messages")
+        } catch {
+            viewModel.errorMessage = "Failed to clear categories: \(error.localizedDescription)"
+        }
+    }
+    
+    private func clearAllTagsAndAnalysis() {
+        do {
+            // Delete all EmailTag records
+            let tagDescriptor = FetchDescriptor<EmailTag>()
+            let tags = try modelContext.fetch(tagDescriptor)
+            for tag in tags {
+                modelContext.delete(tag)
+            }
+            
+            // Delete all EmailAnalysis records
+            let analysisDescriptor = FetchDescriptor<EmailAnalysis>()
+            let analyses = try modelContext.fetch(analysisDescriptor)
+            for analysis in analyses {
+                modelContext.delete(analysis)
+            }
+            
+            // Save changes
+            try modelContext.save()
+            
+            print("✅ Deleted \(tags.count) tags and \(analyses.count) analyses")
+        } catch {
+            viewModel.errorMessage = "Failed to clear tags: \(error.localizedDescription)"
+        }
+    }
+}
+
+// MARK: - Flow Layout for Tags
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowLayoutResult(
+            in: proposal.replacingUnspecifiedDimensions().width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        return result.size
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowLayoutResult(
+            in: bounds.width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.frames[index].minX, y: bounds.minY + result.frames[index].minY), proposal: .unspecified)
+        }
+    }
+    
+    struct FlowLayoutResult {
+        var size: CGSize = .zero
+        var frames: [CGRect] = []
+        
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var currentX: CGFloat = 0
+            var currentY: CGFloat = 0
+            var lineHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                
+                if currentX + size.width > maxWidth && currentX > 0 {
+                    // New line
+                    currentX = 0
+                    currentY += lineHeight + spacing
+                    lineHeight = 0
+                }
+                
+                frames.append(CGRect(x: currentX, y: currentY, width: size.width, height: size.height))
+                
+                currentX += size.width + spacing
+                lineHeight = max(lineHeight, size.height)
+            }
+            
+            self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
+        }
     }
 }
 
