@@ -213,6 +213,14 @@ struct InboxView: View {
                     Label("Categories", systemImage: "tag")
                 }
                 
+#if os(macOS)
+                NavigationLink {
+                    EmailAnalysisExportView()
+                } label: {
+                    Label("Export Analysis", systemImage: "square.and.arrow.up")
+                }
+#endif
+                
                 Menu {
                     if let email = userEmail {
                         Text(email)
@@ -1021,6 +1029,22 @@ struct CategoriesView: View {
         } message: {
             Text("This will delete all existing categories and replace them with the P1-P4 priority system. Existing email categorizations will be cleared.")
         }
+        .alert("Clear All Email Categories?", isPresented: $showingClearCategoriesConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear", role: .destructive) {
+                clearAllEmailCategories()
+            }
+        } message: {
+            Text("This will remove all category assignments from your emails. The emails themselves will not be deleted, just uncategorized.")
+        }
+        .alert("Clear All Tags & Analysis?", isPresented: $showingClearTagsConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear", role: .destructive) {
+                clearAllTagsAndAnalysis()
+            }
+        } message: {
+            Text("This will delete all LLM-generated tags and analysis. Emails will be re-analyzed when you open them.")
+        }
         .alert("Error", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
@@ -1303,14 +1327,17 @@ struct HTMLEmailView: UIViewRepresentable {
 #endif
 
 #Preview("Inbox") {
-    let container = try! ModelContainer(for: Message.self, Category.self, TrainingExample.self, SyncState.self,
-                                       configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let container = try! ModelContainer(
+        for: Message.self, Category.self, TrainingExample.self, SyncState.self, EmailTag.self, EmailAnalysis.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
     let appState = AppState()
     appState.isSignedIn = true
     return InboxView(viewModel: InboxViewModel())
         .environment(appState)
         .environment(\.authService, MockAuthService())
         .environment(\.gmailService, MockGmailService())
+        .environment(\.llmAnalysisService, MockLLMAnalysisService())
         .modelContainer(container)
 }
 

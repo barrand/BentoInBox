@@ -66,6 +66,9 @@ struct BentoInboxApp: App {
                 .environment(appState)
                 .environment(\.authService, authService)
                 .environment(\.gmailService, gmailService)
+                .environment(\.llmAnalysisService, llmAnalysisService)
+                .environment(\.contactsService, contactsService)
+                .environmentObject(ollamaModelManager)
                 .onOpenURL { url in
                     // Handle Google OAuth callback
                     GIDSignIn.sharedInstance.handle(url)

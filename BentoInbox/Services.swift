@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 // MARK: - Auth
 
@@ -694,77 +695,24 @@ final class OllamaLLMAnalysisService: LLMAnalysisService {
         let emailAddress = extractEmailAddress(from: from)
         let inContacts = await contactsService.isInContacts(email: emailAddress)
         
-        // Truncate body to avoid token limits
-        let truncatedBody = String(body.prefix(2000))
+        // Use enhanced prompt builder with few-shot examples
+        let prompt = EnhancedPromptBuilder.buildPrompt(
+            from: from,
+            subject: subject,
+            body: body,
+            inContacts: inContacts,
+            allowedTags: Self.allowedTags
+        )
         
-        let allowedTagsList = Self.allowedTags.map { "  - \"\($0)\"" }.joined(separator: "\n")
-        
-        let prompt = """
-        Analyze this email and extract structured information. You MUST return ONLY valid JSON with no other text.
-        
-        Email:
-        From: \(from)
-        Subject: \(subject ?? "No subject")
-        Body: \(truncatedBody)
-        
-        Additional context:
-        - Sender is\(inContacts ? "" : " NOT") in user's contacts
-        
-        Return JSON with these EXACT fields:
-        {
-          "summary": "One sentence summary of the email",
-          "tags": ["tag1", "tag2"],
-          "intent": "question",
-          "urgency": "normal",
-          "requiresResponse": false,
-          "isActionable": false,
-          "senderCategory": "colleague",
-          "hasDeadline": false,
-          "mentionsMoney": false,
-          "mentionsYouDirectly": false
-        }
-        
-        IMPORTANT - Tag Rules:
-        You MUST choose tags ONLY from this list (do NOT make up new tags):
-\(allowedTagsList)
-        
-        Tag selection guidelines:
-        - Choose 1-3 tags maximum (most emails need 1-2 tags)
-        - Use "personal-sender" ONLY if: sender is in contacts OR clearly a real person (not automated/marketing)
-        - Exclude "personal-sender" if email contains: "newsletter", "unsubscribe", "noreply", "no-reply", "automated", "team@", "support@"
-        - Use "general" for emails that don't fit other categories
-        - Prioritize more specific tags over "general"
-        
-        Intent options (choose ONE):
-        - "question": Sender is asking you something
-        - "action-required": You need to do something
-        - "informational": FYI, no action needed
-        - "promotional": Marketing, sales, offers
-        - "transactional": Receipts, confirmations, automated
-        
-        Urgency options (choose ONE):
-        - "immediate": Urgent, ASAP
-        - "soon": Within a day or two
-        - "normal": Normal priority
-        - "low": Can wait, FYI
-        
-        SenderCategory options (choose ONE):
-        - "colleague": Work colleague
-        - "client": External business contact
-        - "service": Automated service (GitHub, AWS, etc.)
-        - "marketing": Promotional emails
-        - "personal": Friends and family
-        - "unknown": First-time sender
-        
-        Return ONLY the JSON object, no markdown, no code blocks, no explanations.
-        """
+        // Use optimized parameters for classification
+        let optimizedOptions = ModelParameterOptimizer.optimizedOptions()
         
         let request = OllamaRequest(
             model: model,
             prompt: prompt,
             stream: false,
             format: "json",
-            options: OllamaOptions(temperature: 0.3, num_predict: 512)
+            options: optimizedOptions
         )
         
         let response = try await sendOllamaRequest(request)
@@ -802,8 +750,9 @@ final class OllamaLLMAnalysisService: LLMAnalysisService {
                 print("⚠️ LLM used invalid tags (ignored): \(invalidTags.joined(separator: ", "))")
             }
             
-            // Ensure at least "general" tag if no valid tags
-            analysis.tags = validTags.isEmpty ? ["general"] : validTags
+            // Apply tag validation rules to remove conflicting tags
+            let cleanedTags = TagValidationRules.validate(validTags.isEmpty ? ["general"] : validTags, sender: from)
+            analysis.tags = cleanedTags
             
             return analysis
         } catch {

@@ -1,0 +1,54 @@
+# BentoInbox TODO List
+
+Last updated: November 20, 2025
+
+---
+
+## 🎯 IN PROGRESS
+- [ ] Evaluate AI tag accuracy with CSV export tool
+  - Export 20 emails with current model
+  - Manually annotate expected tags
+  - Calculate precision/recall metrics
+  - Compare different models (llama3.1:8b, mistral:7b, phi-3, etc.)
+- [X] Implement Quick Wins for tag accuracy
+  - [X] Lower temperature from 0.3 to 0.1
+  - [X] Add few-shot examples to prompt
+  - [X] Add tag validation rules
+  - Expected improvement: ~65% → ~80% accuracy
+
+---
+
+## 🎯 PLANNED FEATURES
+
+### AI Tagging Improvements
+- [ ] Implement confidence scoring (filter low-confidence tags)
+- [ ] Add chain-of-thought reasoning to prompts
+- [ ] Dynamic few-shot learning from user corrections
+- [ ] Multi-pass analysis (content-focused + sender-focused)
+- [ ] Add more specific tags: "colleague", "client", "announcement", "cold-sales"
+
+### Custom Rules & Filtering
+- [ ] Fuzzy rules system (Support fuzzy matching, e.g., "terms of service", "TOS update")
+- [ ] Custom tagging rules (e.g., "if from calendly.com → tag 'church'")
+- [ ] Domain-based auto-tagging
+- [ ] Language detection (non-English = likely junk)
+- [ ] Manually edit tags in UI
+
+### Email Management
+- [ ] Bulk tagging operations
+- [ ] Smart folders based on tags/rules
+- [ ] Snooze emails (remind me later)
+- [ ] Follow-up reminders
+- [ ] Email templates for quick replies
+- [ ] Better search and filtering
+- [ ] Archive and cleanup tools
+
+- [ ] Statistics and insights (most common tags, response times, etc.)
+
+### Performance
+- [ ] Background analysis (analyze emails as they arrive)
+- [ ] Incremental sync (only fetch new emails)
+- [ ] Better caching strategy
+- [ ] Memory optimization for large inboxes
+
+---
